@@ -104,28 +104,28 @@ def transformCmd (env : Env) (cmd : Command) : CoreTransformM (Env × List State
     | some info =>
       let freshId ← genSSAIdent name.name
       let some mty := LTy.toMonoType? info.ty
-        | throw s!"SSA: type of '{name.name}' is not a monotype"
+        | throw (Strata.DiagnosticModel.fromMessage s!"SSA: type of '{name.name}' is not a monotype")
       let env' := env.insert name.name { ident := freshId, ty := info.ty }
       incrementStat s!"{Stats.renamedVars}"
       return (env', [Statement.init freshId (.forAll [] mty) (.det expr') smd])
-    | none => throw s!"SSA: variable '{name.name}' not found in environment (set)"
+    | none => throw (Strata.DiagnosticModel.fromMessage s!"SSA: variable '{name.name}' not found in environment (set)")
   | .cmd (.set name .nondet smd) =>
     match env.get? name.name with
     | some info =>
       let freshId ← genSSAIdent name.name
       let some mty := LTy.toMonoType? info.ty
-        | throw s!"SSA: type of '{name.name}' is not a monotype"
+        | throw (Strata.DiagnosticModel.fromMessage s!"SSA: type of '{name.name}' is not a monotype")
       let env' := env.insert name.name { ident := freshId, ty := info.ty }
       incrementStat s!"{Stats.renamedVars}"
       return (env', [Statement.init freshId (.forAll [] mty) .nondet smd])
-    | none => throw s!"SSA: variable '{name.name}' not found in environment (havoc)"
+    | none => throw (Strata.DiagnosticModel.fromMessage s!"SSA: variable '{name.name}' not found in environment (havoc)")
   | .cmd (.assert label b amd) =>
     return (env, [Statement.assert label (rewriteExpr env b) amd])
   | .cmd (.assume label b amd) =>
     return (env, [Statement.assume label (rewriteExpr env b) amd])
   | .cmd (.cover label b cmd') =>
     return (env, [Statement.cover label (rewriteExpr env b) cmd'])
-  | .call _ _ _ => throw "SSA: unexpected call command (callElim should have run first)"
+  | .call _ _ _ => throw (Strata.DiagnosticModel.fromMessage "SSA: unexpected call command (callElim should have run first)")
 
 private def collectAllKeys (envs : List Env) : List String :=
   let hs := envs.foldl (fun acc env =>
@@ -149,7 +149,7 @@ def emitJoinMerges (condVar : Expression.Ident)
       let elseId := getIdOr elseInfo preInfo origName
       let ty := getTyOr thenInfo elseInfo preInfo
       let some mty := LTy.toMonoType? ty
-        | throw s!"SSA: type of '{origName}' is not a monotype at join point"
+        | throw (Strata.DiagnosticModel.fromMessage s!"SSA: type of '{origName}' is not a monotype at join point")
       let freshId ← genSSAIdent origName
       let iteExpr : Expression.Expr :=
         Lambda.LExpr.ite () (createFvar condVar) (createFvar thenId) (createFvar elseId)
@@ -176,7 +176,7 @@ def emitNondetJoinHavocs (preEnv thenEnv elseEnv : Env)
     if varChanged thenInfo preInfo || varChanged elseInfo preInfo then
       let ty := getTyOr thenInfo elseInfo preInfo
       let some mty := LTy.toMonoType? ty
-        | throw s!"SSA: type of '{origName}' is not a monotype at nondet join"
+        | throw (Strata.DiagnosticModel.fromMessage s!"SSA: type of '{origName}' is not a monotype at nondet join")
       let freshId ← genSSAIdent origName
       havoces := havoces ++ [Statement.init freshId (.forAll [] mty) .nondet md]
       env := env.insert origName { ident := freshId, ty := ty }
@@ -214,7 +214,7 @@ partial def transformStmt (env : Env) (s : Statement) : CoreTransformM (Env × L
       let (mergedEnv, havoces) ← emitNondetJoinHavocs env thenEnv elseEnv md
       return (mergedEnv, [Stmt.ite .nondet thenStmts' elseStmts' md] ++ havoces)
   | .loop _ _ _ _ _ =>
-    throw "SSA: unexpected loop statement (loopElim should have run first)"
+    throw (Strata.DiagnosticModel.fromMessage "SSA: unexpected loop statement (loopElim should have run first)")
   | .exit label md => return (env, [Stmt.exit label md])
   | .funcDecl decl md => return (env, [Stmt.funcDecl decl md])
   | .typeDecl tc md => return (env, [Stmt.typeDecl tc md])
